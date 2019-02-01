@@ -1,0 +1,215 @@
+<?php
+// Modified by Sunthar to replace 
+// story by research_highlight
+// recent_stories by research_highlights
+// Fri Mar 14 11:31:58 IST 2014
+
+function custom_block_info() {
+
+  $blocks['research_highlights'] = array(
+      'info' => t('[custom] Research Highlights'),
+          // DRUPAL_CACHE_PER_ROLE will be assumed.
+  );
+
+  return $blocks;
+}
+
+function custom_block_configure($delta = '') {
+  // This example comes from node.module.
+  $form = array();
+  switch ($delta) {
+
+    case 'research_highlights':
+
+      $form['research_highlights_block_count'] = array(
+          '#type' => 'select',
+          '#title' => t('Number of items to display'),
+          '#default_value' => variable_get('research_highlights__block_count', 8),
+          '#options' => drupal_map_assoc(array(4, 8, 12, 16, 20, 24, 28, 32, 36, 40)),
+      );
+
+      break;
+  }
+  return $form;
+}
+
+function custom_block_save($delta = '', $edit = array()) {
+  // This example comes from node.module.
+
+  switch ($delta) {
+
+
+    case 'research_highlights':
+      variable_set('research_highlights_block_count', $edit['research_highlights_block_count']);
+      break;
+  }
+}
+
+function custom_block_view($delta = '') {
+
+  global $language;
+  $userlang = $language->language;
+  
+  // This example is adapted from node.module.
+  $block = array();
+
+  switch ($delta) {
+
+  /*
+
+ Direct SQL query
+
+	      SELECT n.nid,
+		field_data_field_news_date.field_news_date_value AS field_data_field_news_date_field_news_date_value
+		FROM node n
+		LEFT JOIN field_data_field_news_date 
+		ON n.nid = field_data_field_news_date.entity_id
+		AND (field_data_field_news_date.entity_type = "node" 
+		AND field_data_field_news_date.deleted = "0")
+                WHERE n.type = "news" AND n.status = 1 
+		ORDER BY field_data_field_news_date_field_news_date_value DESC LIMIT 4;
+
+  PHP SQL query:
+
+      $query = db_query('SELECT n.nid as nid,
+		field_data_field_news_date.field_news_date_value AS field_data_field_news_date_field_news_date_value
+		FROM {node} n
+		LEFT JOIN {field_data_field_news_date} field_data_field_news_date 
+		ON nid = field_data_field_news_date.entity_id
+		AND (field_data_field_news_date.entity_type = "node" 
+		AND field_data_field_news_date.deleted = "0")
+                WHERE n.type = :type AND n.status = 1 
+		ORDER BY field_data_field_news_date_field_news_date_value DESC LIMIT 0,
+             ' . $node_limit, array(':type' => $content_type));
+
+  Old query
+
+
+*/
+
+    case 'research_highlights':
+      $node_limit = variable_get('research_highlights_block_count', 8);
+      $content_type = 'research_highlight';
+      //used help from SQL query in views  --sunthar
+      $query = db_query('SELECT n.nid FROM {node} n WHERE n.type = :type AND n.status = 1 AND n.language = :lang ORDER BY n.created DESC LIMIT 0, ' . $node_limit, array(':type' => $content_type, ':lang' => $userlang));
+     // $query = db_query('SELECT n.nid FROM {node} n WHERE n.type = :type AND n.status = 1 ORDER BY n.created DESC LIMIT 0, ' . $node_limit, array(':type' => $content_type));
+/*
+      $query = db_query('SELECT n.nid as nid,
+		field_data_field_news_date.field_news_date_value AS field_data_field_news_date_field_news_date_value
+		FROM {node} n
+		LEFT JOIN {field_data_field_news_date} field_data_field_news_date 
+		ON nid = field_data_field_news_date.entity_id
+		AND (field_data_field_news_date.entity_type = "node" 
+		AND field_data_field_news_date.deleted = "0")
+                WHERE n.type = :type AND n.status = 1 
+		ORDER BY field_data_field_news_date_field_news_date_value DESC LIMIT 0,
+             ' . $node_limit, array(':type' => $content_type));
+*/
+      $nids = $query->fetchCol();
+      $nodes = node_load_multiple($nids);
+      
+      
+
+      if (!empty($nodes)) {
+        $block['content'] = array(
+            '#theme' => 'research_highlights',
+            '#nodes' => $nodes,
+            '#title' => custom_block_get_title($delta),
+        );
+      }
+
+      break;
+  }
+  return $block;
+}
+
+function custom_theme($existing, $type, $theme, $path) {
+  return array(
+      'research_highlights' => array(
+          'variables' => array('nodes' => NULL, 'title' => NULL),
+          'template' => 'research_highlights',
+      ),
+  );
+}
+
+function custom_trim_text($alter, $value) {
+  if (drupal_strlen($value) > $alter['max_length']) {
+    $value = drupal_substr($value, 0, $alter['max_length']);
+    // TODO: replace this with cleanstring of ctools
+    if (!empty($alter['word_boundary'])) {
+      $regex = "(.*)\b.+";
+      if (function_exists('mb_ereg')) {
+        mb_regex_encoding('UTF-8');
+        $found = mb_ereg($regex, $value, $matches);
+      } else {
+        $found = preg_match("/$regex/us", $value, $matches);
+      }
+      if ($found) {
+        $value = $matches[1];
+      }
+    }
+    // Remove scraps of HTML entities from the end of a strings
+    $value = rtrim(preg_replace('/(?:<(?!.+>)|&(?!.+;)).*$/us', '', $value));
+
+    if (!empty($alter['ellipsis'])) {
+      $value .= t('...');
+    }
+  }
+  if (!empty($alter['html'])) {
+    $value = _filter_htmlcorrector($value);
+  }
+
+  return $value;
+}
+
+function custom_format_comma_field($field_category, $node, $limit = NULL) {
+  $category_arr = array();
+  $category = '';
+  if (!empty($node->{$field_category}[LANGUAGE_NONE])) {
+    foreach ($node->{$field_category}[LANGUAGE_NONE] as $item) {
+      $term = taxonomy_term_load($item['tid']);
+      if ($term) {
+        $category_arr[] = l($term->name, 'taxonomy/term/' . $item['tid']);
+      }
+
+      if ($limit) {
+        if (count($category_arr) == $limit) {
+          $category = implode(', ', $category_arr);
+          return $category;
+        }
+      }
+    }
+  }
+  $category = implode(', ', $category_arr);
+
+  return $category;
+}
+
+function custom_format_category_field($field_category, $node, $limit = NULL) {
+  $category_arr = array();
+  $category = '';
+  if (!empty($node->{$field_category}[LANGUAGE_NONE])) {
+    foreach ($node->{$field_category}[LANGUAGE_NONE] as $item) {
+      $term = taxonomy_term_load($item['tid']);
+      if ($term) {
+        $category_arr[] = $term->name;
+      }
+
+      if ($limit) {
+        if (count($category_arr) == $limit) {
+          $category = implode('/ ', $category_arr);
+          return $category;
+        }
+      }
+    }
+  }
+  $category = implode('/ ', $category_arr);
+
+  return $category;
+}
+
+function custom_block_get_title($delta) {
+  $block = db_query('SELECT title FROM {block} WHERE delta = :delta', array(':delta' => $delta))->fetchObject();
+
+  return $block->title ? $block->title : '';
+}

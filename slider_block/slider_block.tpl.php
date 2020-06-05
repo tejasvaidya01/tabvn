@@ -26,8 +26,10 @@
         //<li data-transition="<?php print $transition; ? REMOVE SPACE >" data-slotamount="6" data-masterspeed="900"  
 
         if (!empty($body[0]['value'])) {
-          $body_value =$body[0]['value'];
-        }
+          $body_value = $body[0]['value'];
+        } else {
+		  $body_value = "";
+		}
         ?>
         <!-- SLIDE DOWN -->
         <li data-transition="fade" data-slotamount="6" data-masterspeed="900"  data-delay="7000"
